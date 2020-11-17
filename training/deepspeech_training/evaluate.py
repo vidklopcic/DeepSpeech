@@ -94,7 +94,6 @@ def evaluate(test_csvs, create_model):
                 tf.import_graph_def(graph_def, name='')
 
             session.run(tf.global_variables_initializer())
-            return sess
         else:
             load_graph_for_evaluation(session)
 
