@@ -83,7 +83,8 @@ def create_flags():
     # Checkpointing
 
     f.DEFINE_string('checkpoint_dir', '', 'directory from which checkpoints are loaded and to which they are saved - defaults to directory "deepspeech/checkpoints" within user\'s data home specified by the XDG Base Directory Specification')
-    f.DEFINE_string('load_checkpoint_dir', '', 'directory in which checkpoints are stored - defaults to directory "deepspeech/checkpoints" within user\'s data home specified by the XDG Base Directory Specification')
+    f.DEFINE_string('model_path', '', 'path to the frozen outpu graph (if specified it is used instead of the checkpoint for evaluation')
+    f.DEFINE_string('load_checkpoint_dir', '', 'directory in which checkpoints are stored - defaults to directory "deepspeech/checkpoits" within user\'s data home specified by the XDG Base Directory Specification')
     f.DEFINE_string('save_checkpoint_dir', '', 'directory to which checkpoints are saved - defaults to directory "deepspeech/checkpoints" within user\'s data home specified by the XDG Base Directory Specification')
     f.DEFINE_integer('checkpoint_secs', 600, 'checkpoint saving interval in seconds')
     f.DEFINE_integer('max_to_keep', 5, 'number of checkpoint files to keep - default value is 5')

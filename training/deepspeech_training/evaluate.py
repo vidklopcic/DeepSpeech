@@ -14,6 +14,7 @@ import tensorflow.compat.v1 as tfv1
 
 from ds_ctcdecoder import ctc_beam_search_decoder_batch, Scorer
 from six.moves import zip
+from tensorflow_core.python.platform import gfile
 
 from .util.config import Config, initialize_globals
 from .util.checkpoints import load_graph_for_evaluation
@@ -84,7 +85,18 @@ def evaluate(test_csvs, create_model):
         num_processes = 1
 
     with tfv1.Session(config=Config.session_config) as session:
-        load_graph_for_evaluation(session)
+        if FLAGS.model_path:
+            print('loading frozen graph:', FLAGS.model_path)
+            with gfile.FastGFile(FLAGS.model_path, 'rb') as f:
+                graph_def = tf.GraphDef()
+                graph_def.ParseFromString(f.read())
+                session.graph.as_default()
+                tf.import_graph_def(graph_def, name='')
+
+            session.run(tf.global_variables_initializer())
+            return sess
+        else:
+            load_graph_for_evaluation(session)
 
         def run_test(init_op, dataset):
             wav_filenames = []
