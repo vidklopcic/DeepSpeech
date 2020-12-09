@@ -1,4 +1,6 @@
 .ipynb_checkpoints
+.idea
+venv
 *.pyc
 *.swp
 *.DS_Store
