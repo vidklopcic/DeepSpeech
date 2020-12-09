@@ -31,7 +31,7 @@ def transcribe_file(audio_path, tlog_path):
     from deepspeech_training.train import create_model  # pylint: disable=cyclic-import,import-outside-toplevel
     from deepspeech_training.util.checkpoints import load_graph_for_evaluation
     initialize_globals()
-    scorer = Scorer(FLAGS.lm_alpha, FLAGS.lm_beta, FLAGS.scorer_path, Config.alphabet)
+    # scorer = Scorer(FLAGS.lm_alpha, FLAGS.lm_beta, FLAGS.scorer_path, Config.alphabet)
     try:
         num_processes = cpu_count()
     except NotImplementedError:
@@ -50,7 +50,28 @@ def transcribe_file(audio_path, tlog_path):
         transposed = tf.nn.softmax(tf.transpose(logits, [1, 0, 2]))
         tf.train.get_or_create_global_step()
         with tf.Session(config=Config.session_config) as session:
-            load_graph_for_evaluation(session)
+            if FLAGS.model_path:
+                with tf.gfile.FastGFile(FLAGS.model_path, 'rb') as fin:
+                    graph_def = tf.GraphDef()
+                    graph_def.ParseFromString(fin.read())
+
+                var_names = [v.name for v in tf.trainable_variables()]
+                var_tensors = tf.import_graph_def(graph_def, return_elements=var_names)
+
+                # build a { var_name: var_tensor } dict
+                var_tensors = dict(zip(var_names, var_tensors))
+
+                training_graph = tf.get_default_graph()
+
+                assign_ops = []
+                for name, restored_tensor in var_tensors.items():
+                    training_tensor = training_graph.get_tensor_by_name(name)
+                    assign_ops.append(tf.assign(training_tensor, restored_tensor))
+
+                init_from_frozen_model_op = tf.group(*assign_ops)
+                session.run(init_from_frozen_model_op)
+            else:
+                load_graph_for_evaluation(session)
             session.run(iterator.make_initializer(data_set))
             transcripts = []
             while True:
@@ -60,8 +81,7 @@ def transcribe_file(audio_path, tlog_path):
                 except tf.errors.OutOfRangeError:
                     break
                 decoded = ctc_beam_search_decoder_batch(batch_logits, batch_lengths, Config.alphabet, FLAGS.beam_width,
-                                                        num_processes=num_processes,
-                                                        scorer=scorer)
+                                                        num_processes=num_processes)
                 decoded = list(d[0][1] for d in decoded)
                 transcripts.extend(zip(starts, ends, decoded))
             transcripts.sort(key=lambda t: t[0])

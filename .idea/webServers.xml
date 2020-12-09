@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="4e692992-7851-4cee-a0ea-89ebe571ea62" name="miner">
+        <fileTransfer rootFolder="/home/vid/STT" accessType="SFTP" host="miner" port="22" sshConfigId="0d301649-17df-40ff-a037-c8a8bb4a368c" sshConfig="vid@miner:22 key" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
