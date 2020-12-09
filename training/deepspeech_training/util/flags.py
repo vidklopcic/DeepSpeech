@@ -16,6 +16,7 @@ def create_flags():
     f.DEFINE_string('dev_files', '', 'comma separated list of files specifying the datasets used for validation. Multiple files will get reported separately. If empty, validation will not be run.')
     f.DEFINE_string('test_files', '', 'comma separated list of files specifying the datasets used for testing. Multiple files will get reported separately. If empty, the model will not be tested.')
     f.DEFINE_string('metrics_files', '', 'comma separated list of files specifying the datasets used for tracking of metrics (after validation step). Currently the only metric is the CTC loss but without affecting the tracking of best validation loss. Multiple files will get reported separately. If empty, metrics will not be computed.')
+    f.DEFINE_string('wav_prefix', '', 'optional prefix to add to the wav path (relative to the csv location)')
 
     f.DEFINE_string('read_buffer', '1MB', 'buffer-size for reading samples from datasets (supports file-size suffixes KB, MB, GB, TB)')
     f.DEFINE_string('feature_cache', '', 'cache MFCC features to disk to speed up future training runs on the same data. This flag specifies the path where cached features extracted from --train_files will be saved. If empty, or if online augmentation flags are enabled, caching will be disabled.')
@@ -83,7 +84,8 @@ def create_flags():
     # Checkpointing
 
     f.DEFINE_string('checkpoint_dir', '', 'directory from which checkpoints are loaded and to which they are saved - defaults to directory "deepspeech/checkpoints" within user\'s data home specified by the XDG Base Directory Specification')
-    f.DEFINE_string('load_checkpoint_dir', '', 'directory in which checkpoints are stored - defaults to directory "deepspeech/checkpoints" within user\'s data home specified by the XDG Base Directory Specification')
+    f.DEFINE_string('model_path', '', 'path to the frozen outpu graph (if specified it is used instead of the checkpoint for evaluation')
+    f.DEFINE_string('load_checkpoint_dir', '', 'directory in which checkpoints are stored - defaults to directory "deepspeech/checkpoits" within user\'s data home specified by the XDG Base Directory Specification')
     f.DEFINE_string('save_checkpoint_dir', '', 'directory to which checkpoints are saved - defaults to directory "deepspeech/checkpoints" within user\'s data home specified by the XDG Base Directory Specification')
     f.DEFINE_integer('checkpoint_secs', 600, 'checkpoint saving interval in seconds')
     f.DEFINE_integer('max_to_keep', 5, 'number of checkpoint files to keep - default value is 5')
@@ -131,6 +133,7 @@ def create_flags():
     f.DEFINE_string('summary_dir', '', 'target directory for TensorBoard summaries - defaults to directory "deepspeech/summaries" within user\'s data home specified by the XDG Base Directory Specification')
 
     f.DEFINE_string('test_output_file', '', 'path to a file to save all src/decoded/distance/loss tuples generated during a test epoch')
+    f.DEFINE_boolean('save_csv', True, 'path to a file to save all src/decoded/distance/loss tuples generated during a test epoch')
 
     # Geometry
 

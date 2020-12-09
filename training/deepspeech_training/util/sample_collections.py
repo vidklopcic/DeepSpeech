@@ -8,6 +8,7 @@ import tarfile
 from pathlib import Path
 from functools import partial
 
+from .flags import FLAGS
 from .helpers import KILOBYTE, MEGABYTE, GIGABYTE, Interleaved
 from .audio import (
     Sample,
@@ -509,7 +510,7 @@ class CSV(SampleList):
             for row in reader:
                 wav_filename = Path(row['wav_filename'])
                 if not wav_filename.is_absolute():
-                    wav_filename = csv_dir / wav_filename
+                    wav_filename = csv_dir / Path(FLAGS.wav_prefix) / wav_filename
                 wav_filename = str(wav_filename)
                 wav_filesize = int(row['wav_filesize']) if 'wav_filesize' in row else 0
                 if labeled:

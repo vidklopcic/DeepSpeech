@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="SshConfigs">
+    <configs>
+      <sshConfig host="miner" id="0d301649-17df-40ff-a037-c8a8bb4a368c" keyPath="$USER_HOME$/.ssh/id_rsa" port="22" nameFormat="DESCRIPTIVE" username="vid" />
+      <sshConfig authType="PASSWORD" host="vid-brisi1" id="ad94edc2-7497-4a77-8c03-7d276f63453c" port="22" nameFormat="DESCRIPTIVE" username="root" />
+    </configs>
+  </component>
+</project>

@@ -8,7 +8,7 @@ metadata:
   source: "{{ event.head.repo.url }}"  # the repo where the pr came from will be inserted here
 tasks:
   - provisionerId: "proj-deepspeech"
-    workerType: "ci-decision-task"
+    workerType: "ci"
     extra:
       github:
         env: true
@@ -19,7 +19,7 @@ tasks:
           - push
           - tag
         branches:
-          - r0.9
+          - r0.8
 
     scopes: [
       "queue:create-task:highest:proj-deepspeech/*",
