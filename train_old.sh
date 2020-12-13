@@ -1,0 +1,1 @@
+python3 DeepSpeech.py --train_files ../data/data_old/data/train.csv --dev_files ../data/data_old/data/dev.csv --test_files ../data/data_old/data/test.csv --train_batch_size 50 --dev_batch_size 50 --test_batch_size 50 --alphabet_config_path ../data/alphabet.txt --export_dir ../model --reduce_lr_on_plateau 1 --epochs 90 --learning_rate 0.0001 --dropout_rate 0.40

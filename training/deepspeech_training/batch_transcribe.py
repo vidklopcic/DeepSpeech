@@ -8,13 +8,14 @@ import os
 import sys
 
 from multiprocessing import cpu_count
+from typing import List, Dict
 
 import absl.app
 import progressbar
 import tensorflow as tf
 import tensorflow.compat.v1 as tfv1
 
-from ds_ctcdecoder import ctc_beam_search_decoder_batch, Scorer
+from ds_ctcdecoder import Scorer, swigwrapper
 from six.moves import zip
 
 from .util.config import Config, initialize_globals
@@ -46,6 +47,96 @@ def sparse_tuple_to_texts(sp_tuple, alphabet):
     return [alphabet.Decode(res) for res in results]
 
 
+def words_from_candidate_transcript(metadata, alphabet):
+    word = ""
+    word_list = []
+    position_list = []
+    word_start_time = 0
+    last_token_i = len(metadata.tokens) - 1
+    # Loop through each character
+    for i, token in enumerate(metadata.tokens):
+        token = alphabet.DecodeSingle(token)
+        start_time = FLAGS.feature_win_step * metadata.timesteps[i] / 1000
+        # Append character to word if it's not a space
+        if token != " ":
+            if len(word) == 0:
+                # Log the start time of the new word
+                word_start_time = start_time
+
+            word = word + token
+            position_list.append(start_time)
+        # Word boundary is either a space or the last character in the array
+        if token == " " or i == last_token_i:
+            word_duration = start_time - word_start_time
+
+            if word_duration < 0:
+                word_duration = 0
+
+            each_word = dict()
+            each_word["word"] = word
+            each_word["start_time"] = round(word_start_time, 4)
+            each_word["duration"] = round(word_duration, 4)
+            each_word["positions"] = position_list
+
+            word_list.append(each_word)
+            # Reset
+            word = ""
+            position_list = []
+            word_start_time = 0
+
+    return word_list
+
+
+def ctc_beam_search_decoder_batch(probs_seq,
+                                  seq_lengths,
+                                  alphabet,
+                                  beam_size,
+                                  num_processes,
+                                  cutoff_prob=1.0,
+                                  cutoff_top_n=40,
+                                  scorer=None):
+    """Wrapper for the batched CTC beam search decoder.
+
+    :param probs_seq: 3-D list with each element as an instance of 2-D list
+                      of probabilities used by ctc_beam_search_decoder().
+    :type probs_seq: 3-D list
+    :param alphabet: alphabet list.
+    :alphabet: Alphabet
+    :param beam_size: Width for beam search.
+    :type beam_size: int
+    :param num_processes: Number of parallel processes.
+    :type num_processes: int
+    :param cutoff_prob: Cutoff probability in alphabet pruning,
+                        default 1.0, no pruning.
+    :type cutoff_prob: float
+    :param cutoff_top_n: Cutoff number in pruning, only top cutoff_top_n
+                         characters with highest probs in alphabet will be
+                         used in beam search, default 40.
+    :type cutoff_top_n: int
+    :param num_processes: Number of parallel processes.
+    :type num_processes: int
+    :param scorer: External scorer for partially decoded sentence, e.g. word
+                   count or language model.
+    :type scorer: Scorer
+    :return: List of tuples of confidence and sentence as decoding
+             results, in descending order of the confidence.
+    :rtype: list
+    """
+    batch_beam_results = swigwrapper.ctc_beam_search_decoder_batch(probs_seq, seq_lengths, alphabet, beam_size,
+                                                                   num_processes, cutoff_prob, cutoff_top_n, scorer)
+
+    batch_candidate_transcripts = []
+    for beam_results in batch_beam_results:
+        candidate_transcripts = []
+        for result in beam_results:
+            candidate_transcripts.append({
+                "confidence": result.confidence,
+                "words": words_from_candidate_transcript(result, alphabet),
+            })
+        batch_candidate_transcripts.append(candidate_transcripts)
+    return batch_candidate_transcripts
+
+
 def evaluate(test_csvs, create_model, csv_file=None, csv_file_obj=None):
     if FLAGS.scorer_path:
         scorer = Scorer(FLAGS.lm_alpha, FLAGS.lm_beta,
@@ -75,6 +166,7 @@ def evaluate(test_csvs, create_model, csv_file=None, csv_file_obj=None):
             with tf.device(device):
                 # Create a scope for all operations of tower i
                 with tf.name_scope('tower_%d' % i):
+                    print('creating tower', i)
                     batch_wav_filename, (batch_x, batch_x_len), batch_y = iterator.get_next()
                     tower_batch_wav_filename.append(batch_wav_filename)
                     tower_batch_x_len.append(batch_x_len)
@@ -126,11 +218,10 @@ def evaluate(test_csvs, create_model, csv_file=None, csv_file_obj=None):
         def run_test(init_op, dataset):
             wav_filenames = []
             predictions = []
-            ground_truths = []
 
             bar = create_progressbar(prefix='Test epoch | ',
                                      widgets=['Steps: ', progressbar.Counter(), ' | ', progressbar.Timer()]).start()
-            log_progress('Test epoch...')
+            log_progress('Transcribe epoch...')
 
             step_count = 0
 
@@ -146,14 +237,14 @@ def evaluate(test_csvs, create_model, csv_file=None, csv_file_obj=None):
                     break
 
                 for i in range(len(Config.available_devices)):
-                    decoded = ctc_beam_search_decoder_batch(batch_logits[i], batch_lengths[i], Config.alphabet, FLAGS.beam_width,
+                    decoded = ctc_beam_search_decoder_batch(batch_logits[i], batch_lengths[i], Config.alphabet,
+                                                            FLAGS.beam_width,
                                                             num_processes=num_processes, scorer=scorer,
-                                                            cutoff_prob=FLAGS.cutoff_prob, cutoff_top_n=FLAGS.cutoff_top_n)
-                    predictions.extend(d[0][1] for d in decoded)
-                    ground_truths.extend(sparse_tensor_value_to_texts(batch_transcripts[i], Config.alphabet))
+                                                            cutoff_prob=FLAGS.cutoff_prob,
+                                                            cutoff_top_n=FLAGS.cutoff_top_n)
+                    predictions.extend(json.dumps(decoded))
                     wav_filenames.extend(
                         os.path.basename(wav_filename.decode('UTF-8')) for wav_filename in batch_wav_filenames[i])
-
                     step_count += 1
                     bar.update(step_count)
                     if csv_file:
@@ -164,9 +255,6 @@ def evaluate(test_csvs, create_model, csv_file=None, csv_file_obj=None):
                     csv_file_obj.flush()
 
             bar.finish()
-            if not FLAGS.save_csv:
-                # Print test summary
-                return calculate_and_print_report(wav_filenames, ground_truths, predictions, dataset)
             return list(zip(wav_filenames, predictions))
 
         predictions = []
@@ -206,5 +294,4 @@ def run_script():
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "4"
     run_script()

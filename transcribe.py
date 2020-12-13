@@ -62,6 +62,7 @@ def transcribe_file(audio_path, tlog_path):
                 decoded = ctc_beam_search_decoder_batch(batch_logits, batch_lengths, Config.alphabet, FLAGS.beam_width,
                                                         num_processes=num_processes,
                                                         scorer=scorer)
+
                 decoded = list(d[0][1] for d in decoded)
                 transcripts.extend(zip(starts, ends, decoded))
             transcripts.sort(key=lambda t: t[0])

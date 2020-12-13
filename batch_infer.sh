@@ -1,0 +1,1 @@
+python3 batch_transcribe.py --test_files /vid/rtvslo/segments_filtered.csv --model_path ~/model/dnevniki_then_old.pb --alphabet_config_path ../data/alphabet.txt --test_batch_size 60 --wav_prefix clips_3s_offset --save_csv --test_output_file /home/vid/rtv_3s_transcriptions.csv --beam_width 1
