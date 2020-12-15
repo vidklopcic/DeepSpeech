@@ -242,7 +242,7 @@ def evaluate(test_csvs, create_model, csv_file=None, csv_file_obj=None):
                                                             num_processes=num_processes, scorer=scorer,
                                                             cutoff_prob=FLAGS.cutoff_prob,
                                                             cutoff_top_n=FLAGS.cutoff_top_n)
-                    predictions.extend(json.dumps(decoded))
+                    predictions.extend([json.dumps(d) for d in decoded])
                     wav_filenames.extend(
                         os.path.basename(wav_filename.decode('UTF-8')) for wav_filename in batch_wav_filenames[i])
                     step_count += 1
