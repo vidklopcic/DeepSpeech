@@ -6,8 +6,6 @@ import csv
 import json
 import os
 import sys
-import threading
-import time
 
 from multiprocessing import cpu_count
 from typing import List, Dict
@@ -126,41 +124,20 @@ def ctc_beam_search_decoder_batch(probs_seq,
     """
     batch_beam_results = swigwrapper.ctc_beam_search_decoder_batch(probs_seq, seq_lengths, alphabet, beam_size,
                                                                    num_processes, cutoff_prob, cutoff_top_n, scorer)
-    return batch_beam_results
 
-
-pending_decode = []
-pending_write = []
-not_done = True
-
-
-def decode_worker():
-    while not_done:
-        try:
-            wav_filename, beam_results = pending_decode.pop()
-        except:
-            time.sleep(1)
-            continue
+    batch_candidate_transcripts = []
+    for beam_results in batch_beam_results:
         candidate_transcripts = []
         for result in beam_results:
             candidate_transcripts.append({
                 "confidence": result.confidence,
-                "words": words_from_candidate_transcript(result, Config.alphabet),
+                "words": words_from_candidate_transcript(result, alphabet),
             })
-        pending_write.append([wav_filename, candidate_transcripts])
+        batch_candidate_transcripts.append(candidate_transcripts)
+    return batch_candidate_transcripts
 
 
-def write_worker(csv_file):
-    while not_done:
-        if len(pending_write):
-            batch_write_len = len(pending_write)
-            csv_file.writerows(pending_write[:batch_write_len])
-            del pending_write[:batch_write_len]
-        else:
-            time.sleep(1)
-
-
-def evaluate(test_csvs, create_model):
+def evaluate(test_csvs, create_model, csv_file=None, csv_file_obj=None):
     if FLAGS.scorer_path:
         scorer = Scorer(FLAGS.lm_alpha, FLAGS.lm_beta,
                         FLAGS.scorer_path, Config.alphabet)
@@ -239,10 +216,18 @@ def evaluate(test_csvs, create_model):
             load_graph_for_evaluation(session)
 
         def run_test(init_op, dataset):
+            wav_filenames = []
+            predictions = []
+
+            bar = create_progressbar(prefix='Test epoch | ',
+                                     widgets=['Steps: ', progressbar.Counter(), ' | ', progressbar.Timer()]).start()
             log_progress('Transcribe epoch...')
+
             step_count = 0
+
             # Initialize iterator to the appropriate dataset
             session.run(init_op)
+
             # First pass, compute losses and transposed logits for decoding
             while True:
                 try:
@@ -251,20 +236,26 @@ def evaluate(test_csvs, create_model):
                 except tf.errors.OutOfRangeError:
                     break
 
-                pending_decode.append(list(zip(batch_wav_filenames, batch_logits, batch_lengths)))
                 for i in range(len(Config.available_devices)):
-                    beam_results = ctc_beam_search_decoder_batch(batch_logits[i], batch_lengths[i], Config.alphabet,
-                                                                 FLAGS.beam_width,
-                                                                 num_processes=num_processes, scorer=scorer,
-                                                                 cutoff_prob=FLAGS.cutoff_prob,
-                                                                 cutoff_top_n=FLAGS.cutoff_top_n)
-                    wav_filenames = [os.path.basename(wav_filename.decode('UTF-8')) for wav_filename in
-                                     batch_wav_filenames[i]]
-                    pending_decode.append(list(zip(wav_filenames, beam_results)))
+                    decoded = ctc_beam_search_decoder_batch(batch_logits[i], batch_lengths[i], Config.alphabet,
+                                                            FLAGS.beam_width,
+                                                            num_processes=num_processes, scorer=scorer,
+                                                            cutoff_prob=FLAGS.cutoff_prob,
+                                                            cutoff_top_n=FLAGS.cutoff_top_n)
+                    predictions.extend(json.dumps(decoded))
+                    wav_filenames.extend(
+                        os.path.basename(wav_filename.decode('UTF-8')) for wav_filename in batch_wav_filenames[i])
                     step_count += 1
-                    print(
-                        f'step: {step_count} | pending_decode: {len(pending_decode)} | pending_write: {len(pending_write)}        ',
-                        end='\r')
+                    bar.update(step_count)
+                    if csv_file:
+                        csv_file.writerows(zip(wav_filenames, predictions))
+                        wav_filenames = []
+                        predictions = []
+                if csv_file_obj:
+                    csv_file_obj.flush()
+
+            bar.finish()
+            return list(zip(wav_filenames, predictions))
 
         predictions = []
         for csv, init_op in zip(test_csvs, test_init_ops):
@@ -287,16 +278,8 @@ def main(_):
                   'the --test_files flag.')
         sys.exit(1)
 
-    for i in range(60):
-        t = threading.Thread(target=decode_worker)
-        t.setDaemon(True)
-        t.start()
-    t = threading.Thread(target=write_worker, args=[out_csv])
-    t.setDaemon(True)
-    t.start()
-
     from .train import create_model  # pylint: disable=cyclic-import,import-outside-toplevel
-    samples = evaluate(FLAGS.test_files.split(','), create_model)
+    samples = evaluate(FLAGS.test_files.split(','), create_model, out_csv, out_f)
 
     if out_f:
         out_f.close()
